@@ -355,13 +355,33 @@ tag:github.com,2008:Repository/1452775612/v2.5.0
 fatal: unable to access '...': schannel: AcquireCredentialsHandle failed
 ```
 
-改用 token 内联推送，**推完立刻清掉**：
+这是**沙箱内 SChannel 拿不到凭据**，不是仓库权限问题。两层解法，按顺序试：
+
+**第一层：token 内联**（前提是 TLS 后端本身能工作）
 
 ```powershell
+$token = gh auth token
 git remote set-url origin "https://x-access-token:$token@github.com/cfengli007/LanShare.git"
 git push origin main
 git remote set-url origin 'https://github.com/cfengli007/LanShare'   # 立刻还原
 ```
+
+**第二层：换 TLS 后端**。如果内联 token 后**仍然报同一个 schannel 错误**，说明问题不在认证，
+而在 SChannel 本身 —— Git for Windows 自带 OpenSSL，可以绕过：
+
+```powershell
+git -c http.sslBackend=openssl push -u origin main
+```
+
+判据：token 内联报同样的 `schannel` 错误 = 认证不是原因，直接换后端（本项目实测有效）。
+
+其它注意：
+
+- 全程不要把 token 打到日志里；日志过滤用 `-replace [regex]::Escape($token), "***"`
+- `gh repo create --push` 在同样的环境里也会失败在 push 这一步，但**仓库已经建好了**，
+  单独补一次 push 即可，不要重复建仓
+- OpenSSL 路径下偶尔会看到 `sh.exe: fatal error - couldn't create signal pipe, Win32 error 5`，
+  属于 Git 内部辅助进程的噪音；**以 git 自己的退出码为准**（0 就是成功）
 
 ## 六、版本号比较
 

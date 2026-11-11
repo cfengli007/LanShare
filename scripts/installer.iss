@@ -157,43 +157,92 @@ end;
 { ── .NET 8 桌面运行时检测 ──────────────────────────────────────────────
   本程序是 framework-dependent 发布（产物约 5 MB，而不是自包含的 188 MB），
   运行时由微软的共享框架提供。所以这里必须**真正拦下来**：
-  没装运行时的话，装完双击 exe 会直接弹「需要 .NET」的报错，体验很差。 }
+  没装运行时的话，装完双击 exe 会直接弹「需要 .NET」的报错，体验很差。
+
+  ⚠️ 这里有四个必须避开的坑，全部实测过（本机 1920x1200 / .NET 8.0.20 + 8.0.33 + 9.0.5）：
+
+  坑 1｜Inno 安装器是 32 位进程，注册表访问会被 WOW64 重定向。
+        实测探针结果：
+          RegKeyExists(HKEY_LOCAL_MACHINE, 'SOFTWARE\dotnet\...')            -> TRUE  （其实是 32 位视图！）
+          RegKeyExists(HKLM64,            'SOFTWARE\dotnet\...')            -> FALSE （64 位视图根本没这个键）
+          RegKeyExists(HKLM32,            'SOFTWARE\dotnet\...')            -> TRUE
+        .NET 的 sharedfx 版本列表**只登记在 32 位视图**（WOW6432Node）。
+        所以「64 位视图优先」是假的，必须显式用 HKLM32 / HKLM64 两个常量分别查，
+        不能指望默认的 HKEY_LOCAL_MACHINE 能代表 64 位。
+
+  坑 2｜commonpf 常量在纯 32 位安装模式下解析成 C:\Program Files (x86)。
+        实测：commonpf = C:\Program Files (x86)。虽然脚本设了
+        ArchitecturesInstallIn64BitMode，但探测函数在 InitializeSetup 阶段运行，
+        那时安装模式还没定，commonpf 仍是 x86 那个。
+        所以目录探测必须**两个路径都查**，不能只查 commonpf。
+
+  坑 3｜RegKeyExists 只看「键在不在」，不看「里面有没有 8.x」。
+        WindowsDesktop.App 键在只装了 .NET 9 的机器上**照样存在**（本机就同时有 9.0.5），
+        用它判断会误放行。必须逐个子键找 8. 前缀。
+
+  坑 4｜只数 8.0.0..8.0.99 会漏掉将来的 8.0.100+。
+        改成直接枚举 Base 下的所有子目录/子键，匹配 '8.' 前缀。 }
 
 const
   DotNet8DownloadUrl = 'https://dotnet.microsoft.com/download/dotnet/8.0';
 
-{ 检测 Microsoft.WindowsDesktop.App 8.x。
-  两个来源都查：目录（最可靠）+ 注册表（防目录被改到别处）。
-  注意必须查 WindowsDesktop.App 而不是 NETCore.App —— WPF 靠的是前者。 }
-function HasDotNet8DesktopRuntime(): Boolean;
+{ 枚举 Base 下所有子目录，返回是否存在 '8.' 开头的（.NET 8 的版本目录形如 8.0.20）。 }
+function DirHas8x(const Base: String): Boolean;
 var
-  Base: String;
+  FindRec: TFindRec;
+begin
+  Result := False;
+  if not DirExists(Base) then Exit;
+  if FindFirst(AddBackslash(Base) + '*', FindRec) then
+  try
+    repeat
+      if FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0 then
+        if Pos('8.', FindRec.Name) = 1 then
+        begin
+          Result := True;
+          Exit;
+        end;
+    until not FindNext(FindRec);
+  finally
+    FindClose(FindRec);
+  end;
+end;
+
+{ 枚举某注册表键下的所有值名，返回是否存在 '8.' 开头的。
+  .NET 安装器把每个已装版本登记成一个 REG_DWORD 值，值名就是版本号。 }
+function RegHas8x(RootKey: Integer; const SubKey: String): Boolean;
+var
+  Names: TArrayOfString;
   I: Integer;
 begin
   Result := False;
-
-  { 1) 目录探测：C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App\8.0.x }
-  Base := ExpandConstant('{commonpf}') + '\dotnet\shared\Microsoft.WindowsDesktop.App';
-  if DirExists(Base) then
-  begin
-    for I := 0 to 99 do
-      if DirExists(Base + '\8.0.' + IntToStr(I)) then
-      begin
-        Result := True;
-        Exit;
-      end;
-  end;
-
-  { 2) 注册表探测：安装器自己登记的 sharedfx 键（x64 与 WOW6432Node 两个视图都查） }
-  if not Result then
-  begin
-    if RegKeyExists(HKEY_LOCAL_MACHINE,
-        'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App') then
-      Result := True
-    else if RegKeyExists(HKEY_LOCAL_MACHINE,
-        'SOFTWARE\WOW6432Node\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App') then
+  if not RegKeyExists(RootKey, SubKey) then Exit;
+  if not RegGetValueNames(RootKey, SubKey, Names) then Exit;
+  for I := 0 to GetArrayLength(Names) - 1 do
+    if Pos('8.', Names[I]) = 1 then
+    begin
       Result := True;
-  end;
+      Exit;
+    end;
+end;
+
+{ 检测 Microsoft.WindowsDesktop.App 8.x（WPF 靠的是它，不是 NETCore.App）。 }
+function HasDotNet8DesktopRuntime(): Boolean;
+var
+  SubKey: String;
+begin
+  Result := False;
+  SubKey := 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App';
+
+  { 1) 注册表：32 位视图（.NET 实际登记在这里）+ 64 位视图，两个都按「有没有 8.x 值」判断 }
+  if RegHas8x(HKLM32, SubKey) then begin Result := True; Exit; end;
+  if RegHas8x(HKLM64, SubKey) then begin Result := True; Exit; end;
+
+  { 2) 目录：64 位安装位置 + 32 位安装位置，两个都查（见坑 2） }
+  if DirHas8x('C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App') then
+  begin Result := True; Exit; end;
+  if DirHas8x('C:\Program Files (x86)\dotnet\shared\Microsoft.WindowsDesktop.App') then
+  begin Result := True; Exit; end;
 end;
 
 procedure InitializeWizard();

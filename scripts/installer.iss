@@ -15,6 +15,13 @@
 ; │ 补丁脚本：signing\Patch-InnoSetup-Loader.ps1（校验用，不是每次构建都要跑）。│
 ; └──────────────────────────────────────────────────────────────────────┘
 ;
+; ┌─ 发布方式 ────────────────────────────────────────────────────────────┐
+; │ framework-dependent（框架依赖）：dist\app 约 5 MB，安装包约 2 MB。      │
+; │ 目标机必须装 .NET 8 桌面运行时，由下面的 InitializeSetup 检测并引导。  │
+; │ 想改回 self-contained：改 scripts\publish.ps1 的 --self-contained 为   │
+; │ true，并把下面 InitializeSetup 的阻塞逻辑改回「只记日志」。             │
+; └──────────────────────────────────────────────────────────────────────┘
+;
 ; 版本号只有一个来源：Directory.Build.props 的 <Version>。
 ; publish.ps1 用 /DAppVersion 传进来，并断言与程序集 InformationalVersion 一致。
 ; 不要在这里写死版本号。
@@ -24,7 +31,7 @@
 #define AppShortName "LanShare"
 
 #ifndef AppVersion
-  #define AppVersion "1.1.0"
+  #define AppVersion "1.1.1"
 #endif
 
 [Setup]
@@ -147,22 +154,29 @@ begin
   Result := '';
 end;
 
-{ ── .NET 运行时检测 ────────────────────────────────────────────────────
-  本程序是 self-contained 发布，正常情况下不需要用户装 .NET。
-  这里只做「存在性提示」：检测不到也不阻塞安装（绝不因为误判让用户装不上），
-  因为 self-contained 包里自带运行时，缺共享运行时也能跑。
-  真正需要拦的情况（比如以后改成 framework-dependent）再改成阻塞。 }
+{ ── .NET 8 桌面运行时检测 ──────────────────────────────────────────────
+  本程序是 framework-dependent 发布（产物约 5 MB，而不是自包含的 188 MB），
+  运行时由微软的共享框架提供。所以这里必须**真正拦下来**：
+  没装运行时的话，装完双击 exe 会直接弹「需要 .NET」的报错，体验很差。 }
+
+const
+  DotNet8DownloadUrl = 'https://dotnet.microsoft.com/download/dotnet/8.0';
+
+{ 检测 Microsoft.WindowsDesktop.App 8.x。
+  两个来源都查：目录（最可靠）+ 注册表（防目录被改到别处）。
+  注意必须查 WindowsDesktop.App 而不是 NETCore.App —— WPF 靠的是前者。 }
 function HasDotNet8DesktopRuntime(): Boolean;
 var
   Base: String;
   I: Integer;
 begin
   Result := False;
-  Base := ExpandConstant('{commonpf}') + '\dotnet\shared\Microsoft.WindowsDesktop.App';
 
+  { 1) 目录探测：C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App\8.0.x }
+  Base := ExpandConstant('{commonpf}') + '\dotnet\shared\Microsoft.WindowsDesktop.App';
   if DirExists(Base) then
   begin
-    for I := 0 to 200 do
+    for I := 0 to 99 do
       if DirExists(Base + '\8.0.' + IntToStr(I)) then
       begin
         Result := True;
@@ -170,27 +184,47 @@ begin
       end;
   end;
 
-  { 8.x 的小版本号不只两位数，兜底再放宽一点检测 }
-  if not Result and DirExists(Base) then
-    Result := FileExists(Base + '\8.0.0\.version') or
-              FileExists(Base + '\8.0.20\.version');
+  { 2) 注册表探测：安装器自己登记的 sharedfx 键（x64 与 WOW6432Node 两个视图都查） }
+  if not Result then
+  begin
+    if RegKeyExists(HKEY_LOCAL_MACHINE,
+        'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App') then
+      Result := True
+    else if RegKeyExists(HKEY_LOCAL_MACHINE,
+        'SOFTWARE\WOW6432Node\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App') then
+      Result := True;
+  end;
 end;
 
 procedure InitializeWizard();
 var
   Detected: String;
 begin
-  { 只是让用户在安装日志里能看到检测结果，不弹窗、不阻塞。 }
   if HasDotNet8DesktopRuntime() then Detected := 'yes' else Detected := 'no';
   Log('LanShare installer: shared .NET 8 Desktop Runtime detected = ' + Detected);
 end;
 
 function InitializeSetup(): Boolean;
+var
+  ErrorCode: Integer;
+  Message: String;
 begin
   Result := True;
-  if not HasDotNet8DesktopRuntime() then
+  if HasDotNet8DesktopRuntime() then Exit;
+
+  Message :=
+    '内网快传需要 .NET 8 桌面运行时（Microsoft .NET Desktop Runtime 8.0），' + #13#10 +
+    '当前系统未检测到。' + #13#10 + #13#10 +
+    '点「是」会打开官方下载页，装好运行时后再运行本安装程序即可。' + #13#10 +
+    '点「否」退出安装。' + #13#10 + #13#10 +
+    '提示：这是一个约 55 MB 的微软官方安装程序，装一次即可，' + #13#10 +
+    '之后内网快传自身的更新不会再要求它。';
+
+  if MsgBox(Message, mbConfirmation, MB_YESNO) = IDYES then
   begin
-    { 不阻塞：self-contained 包自带运行时。只在安装日志与「准备安装」页留痕。 }
-    Log('LanShare installer: 未检测到共享 .NET 8 桌面运行时，将使用程序自带的运行时。');
+    ShellExec('open', DotNet8DownloadUrl, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
   end;
+
+  { 无论用户点哪个，都退出本次安装 —— 没有运行时装下去也用不了。 }
+  Result := False;
 end;

@@ -106,7 +106,12 @@ $publishArgs = @(
     'publish', (Join-Path $root 'src\LanShare.Desktop\LanShare.Desktop.csproj'),
     '-c', $Configuration,
     '-r', $Runtime,
-    '--self-contained', 'true',
+    # 框架依赖发布（framework-dependent）：产物约 5 MB，而不是自包含的 188 MB。
+    # 代价是目标机必须装 .NET 8 桌面运行时（WPF + Kestrel 都要），由 installer.iss 检测并引导安装。
+    # JavaDeck 走的是同一条路线，安装包同样在 2 MB 量级。
+    #   想改回自包含：把下面这行改成 '--self-contained', 'true'，
+    #   并同步改 installer.iss 的 InitializeSetup（那边会把运行时检测降级为只记日志）。
+    '--self-contained', 'false',
     '-p:PublishSingleFile=false',
     '-p:PublishTrimmed=false',
     '-p:DebugType=None',

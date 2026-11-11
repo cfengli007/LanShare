@@ -5,7 +5,7 @@ Windows 原生的局域网文件快传工具：桌面端建分享，任何设备
 - **技术栈**：WPF（.NET 8）+ 内嵌 Kestrel Web 服务
 - **桌面端**：自绘界面，浅色 / 深色 / 跟随系统三档主题
 - **网页端**：Bootstrap 5，手机、平板、其他电脑打开即用，无需安装任何东西
-- **体积**：自包含发布，安装包内含 .NET 运行时，目标机无需预装
+- **体积**：框架依赖发布，安装包仅 **3.7 MB**，免安装版 **2.3 MB**（需 .NET 8 桌面运行时，安装程序会检测并引导）
 - **许可**：GPL-3.0
 
 [![Release](https://img.shields.io/github/v/release/cfengli007/LanShare)](https://github.com/cfengli007/LanShare/releases)
@@ -75,7 +75,13 @@ Windows 原生的局域网文件快传工具：桌面端建分享，任何设备
 3. 安装完成后勾选「启动内网快传」，Web 服务会自动运行，「概览」页显示内网访问地址。
 4. 在「设置」里确认绑定 IP、端口和存储目录；需要时点「放行防火墙」。
 
-**前置条件**：Windows 10 19041+ / Windows 11，x64。安装包是**自包含**发布，目标机不需要装 .NET 8。
+**前置条件**：Windows 10 19041+ / Windows 11，x64，以及 **.NET 8 桌面运行时**（Microsoft .NET Desktop Runtime 8.0）。
+
+> 安装程序会在开始前检测运行时：没检测到就弹提示并打开微软官方下载页，装好后再运行安装包即可。
+> 免安装版同理 —— 缺运行时双击会提示安装。
+>
+> 选框架依赖（而不是把运行时打进包）是为了控制体积：自包含版本安装包 57 MB，
+> 框架依赖版本只有 **3.7 MB**。运行时是一次性的系统级依赖，装过任何 .NET 8 桌面程序（或它自带的更新）之后就不再需要。
 
 **卸载**：Windows「设置 → 应用 → 内网快传 LanShare → 卸载」，或开始菜单里的「卸载 内网快传 LanShare」。
 设置、分享记录和上传/归档文件默认保留在 `%LOCALAPPDATA%\LanShare`。
@@ -247,14 +253,22 @@ dotnet run --project src/LanShare.Desktop
 pwsh -File .\scripts\publish.ps1
 ```
 
-脚本依次：编译原生右键菜单组件 → 跑测试 → Release 自包含发布（win-x64）→ 复制 `LanShare.Shell.dll`、
-`README.md`、`docs/` → 调用打过补丁的 Inno Setup 生成安装包 → 压绿色版 → 生成 `.sha256`。
+脚本依次：编译原生右键菜单组件 → 跑测试 → **Release 框架依赖发布**（win-x64，`--self-contained false`）→
+复制 `LanShare.Shell.dll`、`README.md`、`LICENSE`、`docs/` → 调用打过补丁的 Inno Setup 生成安装包 →
+压绿色版 → 生成 `.sha256`。
+
+> 发布方式在 `scripts/publish.ps1` 的 `--self-contained` 一行切换。
+> 改成 `true` 会得到 188 MB 程序目录 / 57 MB 安装包（自带运行时，目标机零依赖），
+> 但必须同步把 `scripts/installer.iss` 的 `InitializeSetup` 从「阻塞」改回「只记日志」，
+> 否则会把已经自带运行时的用户误拦在门外。
+
+当前（框架依赖）产物规模：`app/` 约 4.9 MB、安装包 3.7 MB、zip 2.3 MB。
 
 产物：
 
 ```
 dist/
-  app/                                          # 自包含程序目录（可直接运行的绿色版）
+  app/                                          # 框架依赖程序目录（可直接运行的绿色版，约 4.9 MB）
   LanShare-Setup-<版本>-win-x64.exe              # 安装包（推荐）
   LanShare-Setup-<版本>-win-x64.exe.sha256
   LanShare-<版本>-win-x64.zip                    # 免安装压缩包（解压即用，不多一层 app 目录）
@@ -502,7 +516,9 @@ signing/               打过提权补丁的 InnoSetup6-patched + Patch-InnoSetu
 - 改用打过提权补丁的 Inno Setup 编译（`SetupLdr.e32` 为 `requireAdministrator`），
   绕开「安全软件拦截非提权进程写 `%TEMP%` → Error 5」
 - 卸载前先 `taskkill`，避免托盘程序占用文件导致卸载残留
-- 安装包内检测 .NET 8 桌面运行时并记入安装日志，但不阻塞（自包含发布自带运行时）
+- 改为**框架依赖发布**：安装包从 57 MB 降到 3.7 MB，免安装版从 82 MB 降到 2.3 MB
+- 安装包内检测 .NET 8 桌面运行时，**缺失时阻止安装**并引导到官方下载页
+  （框架依赖版本没有自带运行时，装下去也用不了，所以必须拦）
 
 ### 1.0.1
 

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="description" content="内网快传文件下载页：查看文件列表并直接下载。">
+  <title>文件下载 · 内网快传</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="page-share">
+  <div class="bg-decor" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <div class="app-shell share-shell" id="sharePage">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="返回内网快传首页">
+        <span class="brand-logo" aria-hidden="true"><i class="bi bi-send-fill"></i></span>
+        <span class="brand-text">
+          <span class="brand-name" id="brandName">内网快传</span>
+          <span class="brand-sub">局域网文件分享</span>
+        </span>
+      </a>
+      <div class="topbar-right">
+        <a class="btn btn-sm btn-outline-secondary topbar-link" href="/">
+          <i class="bi bi-plus-lg"></i> <span>我也要分享</span>
+        </a>
+        <span class="version-badge" id="versionBadge">v1.0.0</span>
+      </div>
+    </header>
+
+    <main class="share-main">
+      <div class="glass-card share-card loading-state" id="shareLoading" aria-label="正在加载分享信息">
+        <div class="sk-hero">
+          <div class="sk sk-hero-icon"></div>
+          <div class="sk-hero-lines">
+            <div class="sk sk-line w-55"></div>
+            <div class="sk sk-line w-40"></div>
+          </div>
+        </div>
+        <div class="sk-grid">
+          <div class="sk sk-cell"></div>
+          <div class="sk sk-cell"></div>
+          <div class="sk sk-cell"></div>
+          <div class="sk sk-cell"></div>
+        </div>
+        <div class="sk-rows">
+          <div class="sk sk-row"></div>
+          <div class="sk sk-row"></div>
+          <div class="sk sk-row"></div>
+        </div>
+      </div>
+
+      <div class="glass-card share-card error-state d-none" id="shareError" role="alert">
+        <div class="error-icon" aria-hidden="true"><i class="bi bi-link-45deg" id="shareErrorIcon"></i></div>
+        <h1 id="shareErrorTitle">分享不存在</h1>
+        <p id="shareErrorText">链接可能输入有误，或者该分享已被删除。</p>
+        <p class="error-hint" id="shareErrorHint">请向分享者确认链接是否完整，或让对方重新创建分享。</p>
+        <p class="error-id d-none" id="shareErrorIdWrap">分享编号 <code id="shareErrorId"></code></p>
+        <div class="error-actions">
+          <button type="button" class="btn btn-primary" id="retryBtn"><i class="bi bi-arrow-clockwise"></i> 重新加载</button>
+          <a class="btn btn-outline-secondary" id="backHomeLink" href="/"><i class="bi bi-house"></i> 返回首页</a>
+        </div>
+      </div>
+
+      <div class="glass-card share-card d-none" id="shareContent">
+        <div class="share-hero">
+          <span class="share-hero-icon tint-default" id="shareIcon" aria-hidden="true"><i class="bi bi-file-earmark"></i></span>
+          <div class="share-hero-main">
+            <div class="share-title-line">
+              <h1 id="shareDisplayName">—</h1>
+              <span class="share-badge d-none" id="shareBadge">有效分享</span>
+            </div>
+            <p id="shareSubtitle">—</p>
+          </div>
+        </div>
+
+        <div class="status-notice d-none" id="statusNotice">
+          <i class="bi bi-exclamation-octagon"></i>
+          <span id="statusNoticeText">该分享已失效。</span>
+        </div>
+
+        <div class="burn-notice d-none" id="burnNotice">
+          <span class="burn-notice-icon" aria-hidden="true"><i class="bi bi-fire"></i></span>
+          <div>
+            <strong>阅后即焚</strong>
+            <p id="burnNoticeText">首次完整下载后，文件将被立即删除，链接随即失效。</p>
+          </div>
+        </div>
+
+        <div class="share-meta-grid">
+          <div class="meta-cell">
+            <span class="meta-label"><i class="bi bi-calendar3"></i> 创建时间</span>
+            <span class="meta-value" id="metaCreated">—</span>
+          </div>
+          <div class="meta-cell">
+            <span class="meta-label"><i class="bi bi-calendar-x"></i> 有效期至</span>
+            <span class="meta-value" id="metaExpires">—</span>
+          </div>
+          <div class="meta-cell countdown-cell">
+            <span class="meta-label"><i class="bi bi-hourglass-split"></i> 剩余时间</span>
+            <span class="meta-value countdown" id="countdown">—</span>
+            <div class="expiry-bar-wrap" id="expiryBarWrap">
+              <div class="expiry-bar" aria-hidden="true"><span id="expiryBar"></span></div>
+              <span class="expiry-caption" id="expiryCaption">链接到期后自动失效</span>
+            </div>
+          </div>
+          <div class="meta-cell">
+            <span class="meta-label"><i class="bi bi-download"></i> 下载次数</span>
+            <span class="meta-value" id="metaDownloads">已下载 0 次</span>
+          </div>
+        </div>
+
+        <div class="packaged-note d-none" id="metaPackaged">
+          <i class="bi bi-file-zip"></i>
+          <span id="metaPackagedText">多个文件已自动打包为 .7z 文件（仅存储，不压缩），下载后解压即可。</span>
+        </div>
+
+        <div class="files-block">
+          <div class="files-head">
+            <h2>文件列表</h2>
+            <span id="fileSummary">—</span>
+          </div>
+          <div class="share-files" id="shareFiles"></div>
+        </div>
+
+        <div class="share-download-actions" id="shareActions">
+          <a class="btn btn-primary btn-lg download-btn" id="downloadBtn" href="#">
+            <i class="bi bi-download"></i> 下载文件
+          </a>
+          <button type="button" class="btn btn-outline-secondary btn-lg" id="copyShareBtn" data-copy-url="" data-copy-label="分享链接">
+            <i class="bi bi-link-45deg"></i> 复制链接
+          </button>
+        </div>
+
+        <div class="share-tips">
+          <i class="bi bi-info-circle"></i>
+          <span>下载按钮直接指向文件，支持断点续传。请仅在可信范围内转发此链接。</span>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <span class="footer-brand"><i class="bi bi-send"></i> LanShare · 局域网文件分享</span>
+      <span>文件由分享者本机提供 · 到期自动清理</span>
+    </footer>
+  </div>
+
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer" aria-live="polite" aria-atomic="false"></div>
+
+  <noscript>
+    <div class="app-shell share-shell">
+      <div class="glass-card" style="margin-top:20px;text-align:center;">
+        <h2 style="font-size:1rem;">需要启用 JavaScript</h2>
+        <p style="font-size:.85rem;color:#64748b;">本页面需要 JavaScript 才能加载分享信息，请在浏览器设置中启用后刷新。</p>
+      </div>
+    </div>
+  </noscript>
+
+  <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/share.js"></script>
+</body>
+</html>

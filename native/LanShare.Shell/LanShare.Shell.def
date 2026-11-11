@@ -1,0 +1,4 @@
+LIBRARY LanShare.Shell
+EXPORTS
+    DllCanUnloadNow PRIVATE
+    DllGetClassObject PRIVATE

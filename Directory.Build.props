@@ -1,0 +1,24 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+
+    <!--
+      版本号唯一来源 === 本文件的 Version。
+      三处必须一致，scripts/publish.ps1 会断言：
+        1) 这里的 Version（决定 AssemblyName.Version）
+        2) 下面的 InformationalVersion（自更新 SelfUpdater.CurrentVersion 读它，可能带 +sha 后缀会被截掉）
+        3) Inno Setup 的 /DAppVersion（安装包文件名 + 卸载列表里的版本）
+      改版本时只改这三行里的 Version/InformationalVersion 两个值，
+      Inno 那边由 publish.ps1 自动传入，不要手改 installer.iss。
+    -->
+    <Version>1.1.0</Version>
+    <InformationalVersion>1.1.0</InformationalVersion>
+
+    <Authors>LanShare</Authors>
+    <Company>LanShare</Company>
+    <Product>内网快传 LanShare</Product>
+    <Copyright>Copyright © 2026</Copyright>
+    <RepositoryUrl>https://github.com/cfengli007/LanShare</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+</Project>

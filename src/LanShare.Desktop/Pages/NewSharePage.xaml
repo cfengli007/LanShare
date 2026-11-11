@@ -1,0 +1,201 @@
+<pages:ShellPage x:Class="LanShare.Desktop.Pages.NewSharePage"
+                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:pages="clr-namespace:LanShare.Desktop.Pages">
+    <!--
+      新建分享：左 = 待分享内容 + 选项 + 创建；右 = 结果卡。
+      两栏用 Grid，左 * / 右 360，窗口变窄时结果卡先被压缩，列表仍可读。
+      自定义有效期用普通 TextBox（数字校验在代码里），不依赖 WPF-UI 的 NumberBox。
+    -->
+    <ScrollViewer x:Name="PageScrollViewer" VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="18,14,18,18">
+
+            <!-- ================= 页头 ================= -->
+            <StackPanel Margin="0,0,0,14">
+                <TextBlock Text="新建分享" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="选择文件或文件夹，生成一个局域网内可直接打开的下载链接。多文件与文件夹会自动打包为 7z（仅存储，不压缩）。"
+                           Style="{StaticResource PageSubtitle}" Margin="0,5,0,0" />
+            </StackPanel>
+
+            <!-- 页面内提示条 -->
+            <Border x:Name="PageBanner" Margin="0,0,0,12" CornerRadius="6" Padding="11,8"
+                    Background="{DynamicResource DangerSoft}" BorderBrush="{DynamicResource Danger}"
+                    BorderThickness="3,0,0,0" Visibility="Collapsed">
+                <TextBlock x:Name="PageBannerText" Text="" FontSize="12" TextWrapping="Wrap"
+                           Foreground="{DynamicResource Danger}" />
+            </Border>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MinWidth="320" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="360" />
+                </Grid.ColumnDefinitions>
+
+                <!-- ================= 左：待分享内容 ================= -->
+                <Border Grid.Column="0" Style="{StaticResource Card}" VerticalAlignment="Top">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="要分享的内容" Style="{StaticResource SectionTitle}"
+                                       VerticalAlignment="Center" Margin="0" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="添加文件" Style="{StaticResource SmallButton}"
+                                        Click="AddFiles_Click" Margin="0,0,8,0" />
+                                <Button Content="添加文件夹" Style="{StaticResource SmallButton}"
+                                        Click="AddFolder_Click" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,8,0,0">
+                            <ListBox x:Name="FileList" MinHeight="150" Background="Transparent"
+                                     BorderThickness="0" Padding="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                     PreviewMouseWheel="Page_PreviewMouseWheel">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Path Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center"
+                                                  Data="M 2 1 L 10 1 L 14 5 L 14 15 L 2 15 Z M 10 1 L 10 5 L 14 5"
+                                                  Stroke="{DynamicResource FgDim}" StrokeThickness="1.2"
+                                                  Width="16" Height="16" Stretch="None" />
+                                            <StackPanel Grid.Column="1" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Path}" Style="{StaticResource HintText}"
+                                                           TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Content="移除" Style="{StaticResource SmallButton}"
+                                                    Tag="{Binding}" Click="Remove_Click" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <StackPanel x:Name="EmptyFilesPanel" HorizontalAlignment="Center"
+                                        VerticalAlignment="Center" IsHitTestVisible="False" Margin="0,18">
+                                <TextBlock Text="还没有选择内容" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                                <TextBlock Text="点击右上角“添加文件”或“添加文件夹”。"
+                                           Style="{StaticResource HintText}" HorizontalAlignment="Center"
+                                           Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Style="{StaticResource RowSeparator}" Margin="0,12,0,0" />
+
+                        <!-- 选项 -->
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="有效期" Style="{StaticResource FieldLabel}"
+                                       VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <ComboBox x:Name="ExpiryCombo" Grid.Column="1" SelectedIndex="3"
+                                      SelectionChanged="ExpiryCombo_SelectionChanged">
+                                <ComboBoxItem Content="10 分钟" Tag="10" />
+                                <ComboBoxItem Content="1 小时" Tag="60" />
+                                <ComboBoxItem Content="6 小时" Tag="360" />
+                                <ComboBoxItem Content="1 天" Tag="1440" />
+                                <ComboBoxItem Content="7 天" Tag="10080" />
+                                <ComboBoxItem Content="自定义…" Tag="custom" />
+                            </ComboBox>
+                            <StackPanel x:Name="CustomExpiryPanel" Grid.Column="3" Orientation="Horizontal"
+                                        Margin="12,0,0,0" Visibility="Collapsed" VerticalAlignment="Center">
+                                <TextBox x:Name="CustomExpiryBox" Width="90" Text="60"
+                                         PreviewTextInput="CustomExpiry_PreviewTextInput"
+                                         TextChanged="CustomExpiry_TextChanged"
+                                         VerticalAlignment="Center" />
+                                <TextBlock Text="分钟" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock x:Name="CustomExpiryHelp" Style="{StaticResource HintText}"
+                                   Foreground="{DynamicResource Warn}" Margin="0,6,0,0" />
+
+                        <CheckBox x:Name="BurnToggle" Content="下载一次后立即失效（阅后即焚）" Margin="0,12,0,0" />
+
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="SelectionSummaryText" Grid.Column="0" Text="未选择任何内容"
+                                       Style="{StaticResource HintText}" VerticalAlignment="Center" />
+                            <Button x:Name="CreateButton" Grid.Column="1" Content="创建分享"
+                                    Style="{StaticResource PrimaryButton}" Click="Create_Click"
+                                    MinWidth="110" IsEnabled="False" />
+                        </Grid>
+
+                        <TextBlock x:Name="CreateStatusText" Style="{StaticResource HintText}"
+                                   Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- ================= 右：结果卡 ================= -->
+                <Border Grid.Column="2" Style="{StaticResource Card}" VerticalAlignment="Top">
+                    <Grid MinHeight="240">
+                        <!-- 结果空态 -->
+                        <StackPanel x:Name="ResultEmptyPanel" VerticalAlignment="Center"
+                                    HorizontalAlignment="Center" Margin="0,16">
+                            <TextBlock Text="链接会显示在这里" FontSize="15" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock Text="创建分享后，可复制内网或外网链接直接发送给同事；通过右键菜单分享的结果也会显示在这里。"
+                                       Style="{StaticResource HintText}" TextWrapping="Wrap" TextAlignment="Center"
+                                       MaxWidth="290" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                        </StackPanel>
+
+                        <!-- 结果内容 -->
+                        <StackPanel x:Name="ResultPanel" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <Border Style="{StaticResource BadgeOk}" Margin="0,0,8,0">
+                                    <TextBlock Text="已创建" Style="{StaticResource BadgeTextOk}" />
+                                </Border>
+                                <TextBlock Text="分享已创建" Style="{StaticResource SectionTitle}"
+                                           VerticalAlignment="Center" Margin="0" />
+                            </StackPanel>
+
+                            <TextBlock x:Name="ResultName" FontWeight="SemiBold" FontSize="14"
+                                       TextWrapping="Wrap" Margin="0,10,0,0" />
+                            <TextBlock x:Name="ResultMeta" Style="{StaticResource HintText}"
+                                       TextWrapping="Wrap" Margin="0,4,0,0" />
+
+                            <TextBlock Text="内网链接" Style="{StaticResource FieldLabel}" Margin="0,14,0,4" />
+                            <TextBox x:Name="ResultInternalBox" IsReadOnly="True" />
+                            <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                <Button Content="复制" Style="{StaticResource SmallButton}"
+                                        Click="CopyInternal_Click" Margin="0,0,6,0" />
+                                <Button Content="打开" Style="{StaticResource SmallButton}"
+                                        Click="OpenInternal_Click" />
+                            </StackPanel>
+
+                            <TextBlock Text="外网链接" Style="{StaticResource FieldLabel}" Margin="0,12,0,4" />
+                            <TextBox x:Name="ResultExternalBox" IsReadOnly="True" />
+                            <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                <Button Content="复制" Style="{StaticResource SmallButton}"
+                                        Click="CopyExternal_Click" Margin="0,0,6,0" />
+                                <Button Content="打开" Style="{StaticResource SmallButton}"
+                                        Click="OpenExternal_Click" />
+                            </StackPanel>
+
+                            <Border Style="{StaticResource RowSeparator}" Margin="0,14,0,12" />
+
+                            <Button Content="打开所在文件夹" Style="{StaticResource FlatButton}"
+                                    Click="Reveal_Click" Margin="0,0,0,8" HorizontalAlignment="Stretch" />
+                            <Button Content="再分享一批" Style="{StaticResource GhostButton}"
+                                    Click="Reset_Click" HorizontalAlignment="Stretch" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</pages:ShellPage>

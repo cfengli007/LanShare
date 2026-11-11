@@ -1,0 +1,304 @@
+<Window x:Class="LanShare.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
+        xmlns:controls="clr-namespace:LanShare.Desktop.Controls"
+        Title="内网快传 LanShare"
+        Width="1180" Height="760" MinWidth="980" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" ResizeMode="CanResize" AllowsTransparency="False"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}"
+        FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Icon="pack://application:,,,/LanShare;component/Assets/app.ico"
+        Loaded="Window_Loaded" Closing="Window_Closing" StateChanged="Window_StateChanged">
+    <!--
+      主窗口骨架（docs/UI-CONTRACT.md 第一节）——固定 5 行：
+        38 标题栏 / 34 菜单栏 / * 内容区 / Auto 状态条 / 62 按钮栏
+
+      三个必须保留的坑（JavaDeck 踩过，别再犯）：
+        1. CaptionHeight=38 的区域是"非客户区"，里面的 WPF 元素收不到鼠标事件，
+           所以标题栏上的最小化/最大化/关闭必须 shell:WindowChrome.IsHitTestVisibleInChrome="True"
+        2. 拖动处理器必须排除按钮（IsInButton 判断），否则 DragMove 抢走鼠标捕获，按钮永远不出 Click
+        3. BusyLayer / ToastLayer 只能占内容区（Grid.Row=2），绝不能包住 Window.Content，
+           否则遮罩会盖住标题栏，关闭按钮点不动
+    -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="38" ResizeBorderThickness="6"
+                            GlassFrameThickness="0" CornerRadius="0"
+                            UseAeroCaptionButtons="False" NonClientFrameEdges="None"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!--
+          左侧图标栏的 40x40 按钮。用 RadioButton 而不是 Button：
+          GroupName 天然互斥，选中态不用手写状态机。
+          图标 Path 的 Stroke 绑定到 RadioButton.Foreground，所以选中/悬停只改 Foreground 就够了。
+        -->
+        <Style x:Key="NavIconButton" TargetType="RadioButton">
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Foreground" Value="{DynamicResource FgDim}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource CaptionHover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+                            </Trigger>
+                            <!-- 放在 IsMouseOver 之后：选中 + 悬停时仍然是 AccentSoft 底 -->
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource Bg}">
+        <Grid x:Name="ContentHost">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38"/>
+                <RowDefinition Height="34"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="62"/>
+            </Grid.RowDefinitions>
+
+            <!-- ===================== 第 1 行：自绘标题栏 ===================== -->
+            <Grid x:Name="TitleBar" Grid.Row="0" Background="{DynamicResource Bg}"
+                  MouseLeftButtonDown="OnTitleBarDrag">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <TextBlock Text="LanShare" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="内网快传" Foreground="{DynamicResource FgFaint}" FontSize="11"
+                               VerticalAlignment="Center" Margin="10,1,0,0"/>
+                </StackPanel>
+
+                <!-- 必须 IsHitTestVisibleInChrome，否则按钮处在 caption 区域里点不到 -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button x:Name="BtnMin" Style="{StaticResource CaptionButton}" Click="OnMinimize"
+                            ToolTip="最小化" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Path Data="M 0 0 L 10 0" Stroke="{DynamicResource Fg}" StrokeThickness="1"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="BtnMax" Style="{StaticResource CaptionButton}" Click="OnMaximize"
+                            ToolTip="最大化" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Path x:Name="MaxIcon" Data="M 0 0 L 10 0 L 10 10 L 0 10 Z"
+                              Stroke="{DynamicResource Fg}" StrokeThickness="1"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+                    <Button x:Name="BtnClose" Style="{StaticResource CloseButton}" Click="OnClose"
+                            ToolTip="关闭" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Path Data="M 0 0 L 10 10 M 10 0 L 0 10" Stroke="{DynamicResource Fg}" StrokeThickness="1.2"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- ===================== 第 2 行：顶部菜单 ===================== -->
+            <Border Grid.Row="1" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}"
+                    BorderThickness="0,0,0,1" Padding="10,0">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" Height="34">
+                        <Button x:Name="MenuFile" Content="文件" Style="{StaticResource MenuBarButton}"
+                                Click="OnMenuFile">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource MenuBarContextMenu}">
+                                    <MenuItem Header="打开分享网页" Click="MenuOpenWeb_Click"/>
+                                    <MenuItem Header="打开存储目录" Click="MenuOpenStorage_Click"/>
+                                    <MenuItem Header="打开设置文件" Click="MenuOpenSettingsFile_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="退出" Click="MenuExit_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+
+                        <Button x:Name="MenuShare" Content="分享" Style="{StaticResource MenuBarButton}"
+                                Click="OnMenuShare">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource MenuBarContextMenu}">
+                                    <MenuItem Header="新建分享" InputGestureText="Ctrl+N" Click="MenuNewShare_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="复制内网地址" Click="MenuCopyInternal_Click"/>
+                                    <MenuItem Header="刷新分享列表" InputGestureText="F5" Click="MenuRefreshShares_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+
+                        <Button x:Name="MenuService" Content="服务" Style="{StaticResource MenuBarButton}"
+                                Click="OnMenuService">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource MenuBarContextMenu}">
+                                    <MenuItem Header="重启服务" Click="MenuRestartService_Click"/>
+                                    <MenuItem Header="放行防火墙" Click="MenuFirewallAllow_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="复制内网地址" Click="MenuCopyInternal_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+
+                        <Button x:Name="MenuUpdate" Content="更新" Style="{StaticResource MenuBarButton}"
+                                Click="OnMenuUpdate">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource MenuBarContextMenu}">
+                                    <MenuItem Header="立即检查更新" Click="MenuCheckUpdate_Click"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MenuAutoCheck" Header="自动检查更新" IsCheckable="True"
+                                              IsChecked="True" Click="MenuToggleAutoCheck_Click"/>
+                                    <MenuItem x:Name="MenuInterval" Header="检查频率">
+                                        <MenuItem x:Name="MenuInterval6" Header="每 6 小时" IsCheckable="True"
+                                                  Tag="6" Click="MenuPickInterval_Click"/>
+                                        <MenuItem x:Name="MenuInterval12" Header="每 12 小时" IsCheckable="True"
+                                                  Tag="12" Click="MenuPickInterval_Click"/>
+                                        <MenuItem x:Name="MenuInterval24" Header="每 24 小时" IsCheckable="True"
+                                                  IsChecked="True" Tag="24" Click="MenuPickInterval_Click"/>
+                                        <MenuItem x:Name="MenuInterval72" Header="每 3 天" IsCheckable="True"
+                                                  Tag="72" Click="MenuPickInterval_Click"/>
+                                        <MenuItem x:Name="MenuInterval168" Header="每 7 天" IsCheckable="True"
+                                                  Tag="168" Click="MenuPickInterval_Click"/>
+                                    </MenuItem>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+
+                        <Button x:Name="MenuTools" Content="工具" Style="{StaticResource MenuBarButton}"
+                                Click="OnMenuTools">
+                            <Button.ContextMenu>
+                                <ContextMenu Style="{StaticResource MenuBarContextMenu}">
+                                    <MenuItem Header="设置…" InputGestureText="Ctrl+," Click="MenuSettings_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="关于 LanShare…" Click="MenuAbout_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- 右侧：有新版本徽标（默认隐藏，静默检查到新版本时由 AppServices/更新服务点亮） -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Margin="0,0,4,0">
+                        <Button x:Name="UpdateBadge" Style="{StaticResource BadgeButton}" Content="有新版本"
+                                Visibility="Collapsed" Click="UpdateBadge_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===================== 第 3 行：内容区（图标栏 + 页面） ===================== -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="52"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 左侧 52px 图标栏：4 个 40x40 矢量图标按钮 -->
+                <Border Grid.Column="0" Background="{DynamicResource Panel}"
+                        BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
+                    <StackPanel Margin="0,10,0,0" HorizontalAlignment="Center">
+                        <!-- 概览：首页图形 -->
+                        <RadioButton x:Name="NavOverview" GroupName="NavRail" Style="{StaticResource NavIconButton}"
+                                     ToolTip="概览 (Ctrl+1)" Tag="overview" Click="Nav_Click">
+                            <Path Width="16" Height="16" StrokeThickness="1.3"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M 2.2 7.2 L 8 2 L 13.8 7.2 M 3.8 6.3 L 3.8 13.6 L 12.2 13.6 L 12.2 6.3"/>
+                        </RadioButton>
+
+                        <!-- 我的分享：分享节点 -->
+                        <RadioButton x:Name="NavShares" GroupName="NavRail" Style="{StaticResource NavIconButton}"
+                                     ToolTip="我的分享 (Ctrl+2)" Tag="shares" Click="Nav_Click">
+                            <Path Width="16" Height="16" StrokeThickness="1.3"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M 10.5 4.3 A 1.9 1.9 0 1 1 14.3 4.3 A 1.9 1.9 0 1 1 10.5 4.3 M 3.6 8 A 1.9 1.9 0 1 1 7.4 8 A 1.9 1.9 0 1 1 3.6 8 M 10.5 11.7 A 1.9 1.9 0 1 1 14.3 11.7 A 1.9 1.9 0 1 1 10.5 11.7 M 7.2 7.2 L 10.8 5.1 M 7.2 8.8 L 10.8 10.9"/>
+                        </RadioButton>
+
+                        <!-- 新建分享：圆形加号 -->
+                        <RadioButton x:Name="NavNew" GroupName="NavRail" Style="{StaticResource NavIconButton}"
+                                     ToolTip="新建分享 (Ctrl+3)" Tag="new" Click="Nav_Click">
+                            <Path Width="16" Height="16" StrokeThickness="1.3"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M 1.6 8 A 6.4 6.4 0 1 1 14.4 8 A 6.4 6.4 0 1 1 1.6 8 M 8 4.9 L 8 11.1 M 4.9 8 L 11.1 8"/>
+                        </RadioButton>
+
+                        <!-- 设置：推子图形 -->
+                        <RadioButton x:Name="NavSettings" GroupName="NavRail" Style="{StaticResource NavIconButton}"
+                                     ToolTip="设置 (Ctrl+4)" Tag="settings" Click="Nav_Click">
+                            <Path Width="16" Height="16" StrokeThickness="1.3"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M 2.2 5 L 8.4 5 M 11.6 5 L 13.8 5 M 8.4 5 A 1.6 1.6 0 1 1 11.6 5 A 1.6 1.6 0 1 1 8.4 5 M 2.2 11 L 4.4 11 M 7.6 11 L 13.8 11 M 4.4 11 A 1.6 1.6 0 1 1 7.6 11 A 1.6 1.6 0 1 1 4.4 11"/>
+                        </RadioButton>
+                    </StackPanel>
+                </Border>
+
+                <!--
+                  页面容器：内容由 ShellPage 提供。
+                  必须显式 Stretch —— ContentControl 默认是 Left/Top 对齐，
+                  页面里的 ScrollViewer 会缩到内容高度，下方留一大块空白且不滚动。
+                -->
+                <ContentControl x:Name="PageHost" Grid.Column="1" Focusable="False"
+                                HorizontalContentAlignment="Stretch"
+                                VerticalContentAlignment="Stretch"/>
+
+                <!-- 叠加层：只盖内容区，不盖标题栏 -->
+                <Grid x:Name="BusyLayer" Grid.ColumnSpan="2" Panel.ZIndex="9000"/>
+                <controls:ToastHost x:Name="ToastLayer" Grid.ColumnSpan="2" Panel.ZIndex="8000"/>
+            </Grid>
+
+            <!-- ===================== 第 4 行：状态条 ===================== -->
+            <Border Grid.Row="3" Background="Transparent" Padding="0,5,0,6">
+                <TextBlock x:Name="StatusText" Style="{StaticResource HintText}" Margin="14,0"
+                           TextTrimming="CharacterEllipsis" Text="就绪"/>
+            </Border>
+
+            <!-- ===================== 第 5 行：按钮栏 ===================== -->
+            <Border Grid.Row="4" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}"
+                    BorderThickness="0,1,0,0" Padding="14,0">
+                <Grid>
+                    <!-- 左：当前页的 BuildActions() -->
+                    <ContentControl x:Name="PageActions" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                    Focusable="False"/>
+
+                    <!-- 右：次要操作区 -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock x:Name="LastCheckText" Style="{StaticResource HintText}"
+                                   VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <Button x:Name="CheckUpdateButton" Content="检查更新" Style="{StaticResource FlatButton}"
+                                Padding="14,7" Click="MenuCheckUpdate_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- 托盘图标：无视觉元素，放哪一行都不影响布局（H.NotifyIcon 必须保留） -->
+            <tb:TaskbarIcon x:Name="TrayIcon" Grid.Row="0"
+                            ToolTipText="内网快传 LanShare"
+                            MenuActivation="RightClick"
+                            TrayMouseDoubleClick="TrayIcon_TrayMouseDoubleClick">
+                <tb:TaskbarIcon.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem x:Name="TrayShowHideMenuItem" Header="隐藏主窗口" Click="TrayShowHide_Click"/>
+                        <MenuItem Header="新建分享" Click="TrayNewShare_Click"/>
+                        <MenuItem Header="打开分享网页" Click="TrayOpenWeb_Click"/>
+                        <MenuItem Header="复制内网地址" Click="TrayCopyInternal_Click"/>
+                        <MenuItem Header="设置" Click="TraySettings_Click"/>
+                        <Separator/>
+                        <MenuItem Header="退出" Click="TrayExit_Click"/>
+                    </ContextMenu>
+                </tb:TaskbarIcon.ContextMenu>
+            </tb:TaskbarIcon>
+        </Grid>
+    </Border>
+</Window>

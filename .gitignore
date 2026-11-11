@@ -1,0 +1,50 @@
+# ── 构建产物 ──────────────────────────────────────────────────
+bin/
+obj/
+dist/
+publish/
+TestResults/
+
+# ── IDE / 用户文件 ────────────────────────────────────────────
+.vs/
+*.user
+*.suo
+*.log
+
+# ── 原生中间产物（native/LanShare.Shell 编译后会留下这些）──────
+# LanShare.Shell.dll 由 scripts/build-native.ps1 现场编译（需要 VS C++ 生成工具），
+# clone 下来跑一次脚本就能得到，中间文件没必要进库。
+#
+# 注意 .gitignore 只对「未跟踪」的文件生效。这三个中间产物曾被 add 进索引，
+# 光写规则拦不住，必须先用 git rm --cached 移出索引（本仓库已执行过）。
+# 以后若 git status 又冒出它们，说明有人手滑 add 了，同样用 --cached 摘掉。
+*.[Oo][Bb][Jj]
+*.[Ll][Ii][Bb]
+*.[Ee][Xx][Pp]
+*.pdb
+*.ilk
+native/LanShare.Shell/build/
+
+# ── signing：打过提权补丁的 Inno Setup 副本「入库」──────────────
+# signing/InnoSetup6-patched/ 约 32.2 MB / 82 个文件（Inno Setup 6.7.1），结论是**提交进仓库**：
+#   • 它只是 Inno Setup 6 的官方二进制 + 一个被改写 manifest 的 SetupLdr.e32，
+#     不含源码、不含任何私钥；
+#   • 不进库的话每个贡献者都要自己 robocopy 再跑 mt.exe 打补丁，极易做漏；
+#     而那个打过补丁的 SetupLdr.e32 正是绕开「国产安全软件拦截非提权进程
+#     静默写 %TEMP% → Error 5」的关键，漏了就打不出能安装的包；
+#   • scripts/publish.ps1 硬性依赖 signing/InnoSetup6-patched/ISCC.exe，缺失直接构建失败。
+# 完整原因、体积与重建步骤见 signing/README.md。
+#
+# 真正不能进库的是私钥与打补丁的临时工作目录：
+signing/toolchain/*.pfx
+signing/toolchain/*.cer
+signing/InnoSetup6-patched/_patchwork/
+# 任何位置的代码签名私钥（本项目当前不签名；将来若签，绝不提交）
+*.pfx
+*.snk
+
+# ── 构建机中间产物 / 随手生成的压缩包 ────────────────────────
+work/
+*.zip
+*.7z
+*.tmp

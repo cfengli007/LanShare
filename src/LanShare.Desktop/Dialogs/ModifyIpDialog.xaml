@@ -1,0 +1,146 @@
+<Window x:Class="LanShare.Desktop.Dialogs.ModifyIpDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Icon="pack://application:,,,/LanShare;component/Assets/app.ico"
+        Title="修改本机 IP" Width="580" Height="640"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="False"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Fg}"
+        Language="zh-CN" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <!--
+      修改本机 IP。骨架与其他对话框一致：标题栏 40 / 内容 * / 按钮栏 64。
+
+      ⚠️ 本文件只换皮：业务逻辑（NetworkConfigurator 调用、DHCP/静态切换、UAC 提权）
+         一行都没动，控件名（AdapterCombo / IpBox / PrefixBox / GatewayBox /
+         DhcpRadio / StaticRadio / StaticPanel / ApplyButton / ApplyProgress /
+         ApplyStatusText / IpInfoBar）与原实现保持一致，代码后置才能原样复用。
+
+      坑：原来 ui:NumberBox 的 Value 是 double?，换成 TextBox 后代码里要自己解析，
+          见代码后置的 ReadPrefixLength()。
+    -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="40" ResizeBorderThickness="0"
+                            GlassFrameThickness="0" CornerRadius="0" UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="64"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏 -->
+        <Grid Grid.Row="0" Background="{DynamicResource TitleBarBg}" MouseLeftButtonDown="OnDrag">
+            <TextBlock Text="修改本机 IP" FontSize="13" FontWeight="SemiBold"
+                       VerticalAlignment="Center" Margin="16,0,0,0"/>
+            <Button Style="{StaticResource CloseButton}" HorizontalAlignment="Right" Width="44" Height="40"
+                    Click="Close_Click" shell:WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="关闭">
+                <Path Data="M 0 0 L 10 10 M 10 0 L 0 10" Stroke="{DynamicResource Fg}" StrokeThickness="1.2"/>
+            </Button>
+        </Grid>
+
+        <!-- 内容 -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="24,16,24,16">
+            <StackPanel>
+                <TextBlock Text="选择网卡，然后切换为自动获取（DHCP）或填写静态地址。应用时会弹出 Windows 管理员授权。"
+                           Style="{StaticResource HintText}" TextWrapping="Wrap"/>
+
+                <TextBlock Text="网络适配器" Style="{StaticResource FieldLabel}" Margin="0,16,0,5"/>
+                <ComboBox x:Name="AdapterCombo" SelectionChanged="AdapterCombo_SelectionChanged"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                    <RadioButton x:Name="DhcpRadio" Content="自动获取 IP（DHCP）" GroupName="IpMode"
+                                 Checked="IpMode_Checked" Margin="0,0,20,0"/>
+                    <RadioButton x:Name="StaticRadio" Content="使用静态 IP" GroupName="IpMode"
+                                 Checked="IpMode_Checked"/>
+                </StackPanel>
+
+                <Grid x:Name="StaticPanel" Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="140"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Grid.Column="0">
+                        <TextBlock Text="IP 地址" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="IpBox" Margin="0,4,0,0"/>
+                        <TextBlock Text="例如 192.168.1.50" Style="{StaticResource HintText}" Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0" Grid.Column="2">
+                        <TextBlock Text="子网前缀" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="PrefixBox" Margin="0,4,0,0" MaxLength="2"/>
+                        <TextBlock Text="1–32" Style="{StaticResource HintText}" Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,14,0,0">
+                        <TextBlock Text="默认网关（可留空）" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="GatewayBox" Margin="0,4,0,0"/>
+                        <TextBlock Text="例如 192.168.1.1　·　前缀 24 对应子网掩码 255.255.255.0。"
+                                   Style="{StaticResource HintText}" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- 提示区：替代原 ui:InfoBar。三种语气各一套配色，默认折叠 -->
+                <Border x:Name="IpInfoBar" Margin="0,16,0,0" CornerRadius="8" BorderThickness="1"
+                        Padding="12,10" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="IpInfoTitle" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="IpInfoMessage" FontSize="12" Margin="0,4,0,0"
+                                   Foreground="{DynamicResource FgDim}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <!-- 忙碌指示：Ellipse + RotateTransform 动画（不是 ProgressRing，那个随 WPF-UI 一起删掉了） -->
+                    <Grid x:Name="ApplyProgress" Width="18" Height="18" Margin="0,0,8,0"
+                          VerticalAlignment="Center" Visibility="Collapsed">
+                        <Ellipse Stroke="{DynamicResource Accent}" StrokeThickness="2" Opacity="0.25"/>
+                        <Ellipse Stroke="{DynamicResource Accent}" StrokeThickness="2"
+                                 StrokeDashArray="1 3" RenderTransformOrigin="0.5,0.5">
+                            <Ellipse.RenderTransform>
+                                <RotateTransform x:Name="ApplySpinnerRotate"/>
+                            </Ellipse.RenderTransform>
+                            <Ellipse.Triggers>
+                                <EventTrigger RoutedEvent="Loaded">
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                             From="0" To="360" Duration="0:0:1"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
+                            </Ellipse.Triggers>
+                        </Ellipse>
+                    </Grid>
+                    <TextBlock x:Name="ApplyStatusText" Style="{StaticResource HintText}"
+                               VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 按钮栏 -->
+        <Border Grid.Row="2" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Line}"
+                BorderThickness="0,1,0,0" Padding="20,0">
+            <Grid>
+                <Button Content="打开网络连接" Style="{StaticResource FlatButton}" Click="OpenNetworkConnections_Click"
+                        HorizontalAlignment="Left" VerticalAlignment="Center" Padding="14,6"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Content="取消" Style="{StaticResource FlatButton}" Click="Cancel_Click"
+                            Margin="0,0,8,0" Padding="18,6" IsCancel="True"/>
+                    <Button x:Name="ApplyButton" Content="应用" Style="{StaticResource PrimaryButton}"
+                            Click="Apply_Click" Padding="22,6" IsDefault="True"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="description" content="内网快传 —— 在局域网内快速、安全地分享文件，支持大文件、多文件打包、有效期与阅后即焚。">
+  <title>内网快传 · 局域网文件分享</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="page-index">
+  <div class="bg-decor" aria-hidden="true">
+    <span class="blob blob-1"></span>
+    <span class="blob blob-2"></span>
+    <span class="blob blob-3"></span>
+  </div>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="内网快传首页">
+        <span class="brand-logo" aria-hidden="true"><i class="bi bi-send-fill"></i></span>
+        <span class="brand-text">
+          <span class="brand-name" id="brandName">内网快传</span>
+          <span class="brand-sub">局域网文件分享</span>
+        </span>
+      </a>
+      <div class="topbar-right">
+        <a class="btn btn-sm btn-outline-secondary topbar-link" href="#sharesSection">
+          <i class="bi bi-collection"></i> 我的分享
+        </a>
+        <span class="status-pill" id="statusPill" data-state="checking" role="status">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="statusText">检查服务…</span>
+        </span>
+        <span class="version-badge" id="versionBadge">v1.0.0</span>
+      </div>
+    </header>
+
+    <section class="hero" aria-labelledby="heroTitle">
+      <div class="hero-copy">
+        <span class="eyebrow"><i class="bi bi-lightning-charge-fill"></i> 无需登录 · 局域网直连 · 大文件友好</span>
+        <h1 id="heroTitle">把文件丢进来，<br><span class="text-gradient">一键分享给同事。</span></h1>
+        <p class="hero-lead">
+          文件保存在这台电脑上，同事通过内网地址直接下载。支持多文件自动打包、灵活有效期与阅后即焚，不经过任何第三方服务器。
+        </p>
+        <ul class="feature-chips">
+          <li><i class="bi bi-hdd-network"></i> 内网高速传输</li>
+          <li><i class="bi bi-file-zip"></i> 多文件打包 7z</li>
+          <li><i class="bi bi-clock-history"></i> 到期自动清理</li>
+          <li><i class="bi bi-fire"></i> 阅后即焚</li>
+        </ul>
+      </div>
+
+    </section>
+
+    <main class="page-main">
+      <section class="glass-card upload-card" aria-labelledby="uploadTitle">
+        <div class="card-heading">
+          <div>
+            <h2 id="uploadTitle">上传文件</h2>
+            <p class="card-sub">拖拽文件到下方区域，或点击选择；多文件会自动打包</p>
+          </div>
+          <span class="soft-badge"><i class="bi bi-shield-check"></i> 仅保存在本机</span>
+        </div>
+
+        <div class="upload-layout">
+          <div class="upload-left">
+            <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="拖拽文件到这里，或点击选择文件">
+              <input type="file" id="fileInput" class="visually-hidden" multiple aria-label="选择要分享的文件">
+              <span class="dropzone-icon" aria-hidden="true"><i class="bi bi-cloud-arrow-up"></i></span>
+              <span class="dropzone-title">拖拽文件到这里</span>
+              <span class="dropzone-sub">或 <span class="link-like">点击选择文件</span> · 单次最大 <strong id="maxSizeHint">2 GB</strong></span>
+              <span class="dropzone-note"><i class="bi bi-people"></i> 同一局域网内的设备可直接下载</span>
+            </div>
+
+            <div class="file-list-wrap d-none" id="fileListWrap">
+              <div class="file-list-head">
+                <span>已选 <strong id="fileCount">0</strong> 个文件 · 共 <span id="fileTotal">0 B</span></span>
+                <button type="button" class="btn btn-link" id="clearFilesBtn"><i class="bi bi-trash3"></i> 清空</button>
+              </div>
+              <div class="file-list" id="fileList"></div>
+            </div>
+          </div>
+
+          <div class="upload-side">
+            <div class="option-block" style="margin-top:0;">
+              <div class="option-head">
+                <span class="option-title"><i class="bi bi-clock-history"></i> 链接有效期</span>
+                <span class="option-hint" id="expiryHint"></span>
+              </div>
+              <div class="expiry-options" role="radiogroup" aria-label="链接有效期">
+                <label class="expiry-option"><input type="radio" name="expiry" value="10"><span>10 分钟</span></label>
+                <label class="expiry-option"><input type="radio" name="expiry" value="60"><span>1 小时</span></label>
+                <label class="expiry-option"><input type="radio" name="expiry" value="360"><span>6 小时</span></label>
+                <label class="expiry-option"><input type="radio" name="expiry" value="1440" checked><span>24 小时</span></label>
+                <label class="expiry-option"><input type="radio" name="expiry" value="10080"><span>7 天</span></label>
+                <label class="expiry-option"><input type="radio" name="expiry" value="custom" id="expiryCustom"><span>自定义</span></label>
+              </div>
+              <div class="custom-expiry d-none" id="customExpiryWrap">
+                <label for="customMinutes">自定义有效期（分钟）</label>
+                <div class="input-group">
+                  <input type="number" class="form-control" id="customMinutes" min="1" max="43200" step="1" value="60" inputmode="numeric" aria-label="自定义有效期分钟数">
+                  <span class="input-group-text">分钟</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="burn-row">
+              <span class="burn-icon" aria-hidden="true"><i class="bi bi-fire"></i></span>
+              <div class="burn-text">
+                <label for="burnSwitch">阅后即焚</label>
+                <p>首次完整下载后自动删除文件，链接立即失效</p>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="burnSwitch" aria-label="阅后即焚">
+              </div>
+            </div>
+
+            <div class="upload-actions">
+              <button type="button" class="btn btn-primary btn-lg upload-btn" id="uploadBtn">
+                <i class="bi bi-cloud-arrow-up"></i> 开始上传
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-lg d-none" id="cancelUploadBtn">
+                <i class="bi bi-x-lg"></i> 取消上传
+              </button>
+            </div>
+            <p class="upload-hint" id="uploadHint">选择一个文件后即可上传</p>
+
+            <div class="resume-banner d-none" id="resumeBanner" role="status" aria-live="polite">
+              <span class="resume-icon" aria-hidden="true"><i class="bi bi-arrow-repeat"></i></span>
+              <div class="resume-main">
+                <div class="resume-title" id="resumeTitle">发现未完成的上传</div>
+                <div class="resume-text" id="resumeText">上次的上传尚未完成，可继续或放弃。</div>
+              </div>
+              <div class="resume-actions">
+                <button type="button" class="btn btn-sm btn-primary" id="resumeContinueBtn">
+                  <i class="bi bi-play-fill"></i> 继续上传
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="resumeDiscardBtn">
+                  <i class="bi bi-x-lg"></i> 放弃
+                </button>
+              </div>
+            </div>
+
+            <div class="progress-panel d-none" id="progressWrap" aria-live="polite">
+              <div class="progress-head">
+                <span id="progressText">正在上传…</span>
+                <span class="progress-percent" id="progressPercent">0%</span>
+              </div>
+              <div class="progress" id="progressBarWrap" role="progressbar" aria-label="上传进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="progress-bar" id="progressBar"></div>
+              </div>
+              <div class="progress-detail" id="progressDetail">准备上传…</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="glass-card result-card d-none" id="resultCard" tabindex="-1" aria-labelledby="resultTitle" aria-live="polite">
+        <div class="result-head">
+          <span class="result-icon" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+          <div>
+            <h2 id="resultTitle">分享创建成功</h2>
+            <p class="result-sub">把链接发给同事，在局域网内直接下载</p>
+          </div>
+        </div>
+
+        <div class="link-grid">
+          <div class="link-block internal">
+            <div class="link-label"><span class="dot" aria-hidden="true"></span> 分享链接</div>
+            <code class="link-url" id="resultInternalUrl">—</code>
+            <div class="link-actions">
+              <button type="button" class="btn btn-outline-primary" id="resultInternalCopy" data-copy-url="" data-copy-label="分享链接">
+                <i class="bi bi-clipboard"></i> 复制
+              </button>
+              <a class="btn btn-outline-secondary" id="resultInternalOpen" href="#" target="_blank" rel="noopener">
+                <i class="bi bi-box-arrow-up-right"></i> 打开
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="result-burn d-none" id="resultBurnAlert">
+          <i class="bi bi-fire"></i>
+          <div>
+            <strong>阅后即焚已开启</strong><br>
+            请确认对方已准备好接收；首次完整下载完成后，文件会被立即删除，链接随即失效。
+          </div>
+        </div>
+
+        <div class="result-foot">
+          <div>
+            <div class="result-meta" id="resultMeta">—</div>
+            <div class="result-expiry" id="resultExpiryText">—</div>
+          </div>
+          <button type="button" class="btn btn-outline-secondary" id="newShareBtn">
+            <i class="bi bi-plus-lg"></i> 继续分享
+          </button>
+        </div>
+      </section>
+
+      <section class="glass-card shares-card" id="sharesSection" aria-labelledby="sharesTitle">
+        <div class="shares-head">
+          <div class="shares-title">
+            <h2 id="sharesTitle">我的分享</h2>
+            <span class="count-badge" id="shareCountBadge">0 个</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="d-none d-sm-inline" style="font-size:.72rem;color:var(--ls-faint);">仅显示当前浏览器创建的分享</span>
+            <button type="button" class="refresh-btn" id="refreshSharesBtn" title="刷新列表" aria-label="刷新我的分享">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="shares-loading" id="sharesLoading" aria-label="正在加载分享列表">
+          <div class="skeleton-row"><span class="sk sk-icon"></span><div class="sk-body"><span class="sk sk-line w-55"></span><span class="sk sk-line w-40"></span></div></div>
+          <div class="skeleton-row"><span class="sk sk-icon"></span><div class="sk-body"><span class="sk sk-line w-70"></span><span class="sk sk-line w-55"></span></div></div>
+          <div class="skeleton-row"><span class="sk sk-icon"></span><div class="sk-body"><span class="sk sk-line w-40"></span><span class="sk sk-line w-70"></span></div></div>
+        </div>
+
+        <div class="shares-alert d-none" id="sharesError" role="alert">
+          <i class="bi bi-exclamation-triangle"></i>
+          <span id="sharesErrorText">无法加载我的分享</span>
+          <button type="button" class="btn btn-sm btn-outline-danger" id="sharesRetryBtn">重试</button>
+        </div>
+
+        <div class="empty-state d-none" id="sharesEmpty">
+          <div class="empty-icon" aria-hidden="true"><i class="bi bi-inbox"></i></div>
+          <h3>还没有分享记录</h3>
+          <p>上传一个文件后，分享会出现在这里，方便随时复制或终止。</p>
+          <a class="btn btn-sm btn-outline-primary" href="#dropzone"><i class="bi bi-cloud-arrow-up"></i> 去上传</a>
+        </div>
+
+        <div class="shares-list" id="sharesList" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span class="footer-brand"><i class="bi bi-send"></i> LanShare · 局域网文件分享</span>
+      <span id="footerMeta">内网快传 · 文件仅保存在本机 · 到期自动清理</span>
+    </footer>
+  </div>
+
+  <div class="modal fade" id="revokeModal" tabindex="-1" aria-labelledby="revokeModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content revoke-modal">
+        <div class="modal-body">
+          <span class="modal-icon" aria-hidden="true"><i class="bi bi-exclamation-triangle"></i></span>
+          <h2 id="revokeModalTitle">终止这个分享？</h2>
+          <p class="modal-share-name" id="revokeShareName">—</p>
+          <p class="modal-share-meta" id="revokeShareMeta">—</p>
+          <div class="modal-warning">
+            <i class="bi bi-info-circle"></i>
+            <span>终止后链接立即失效，已上传的文件会被删除，此操作无法撤销。</span>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-danger" id="revokeConfirmBtn">
+              <i class="bi bi-trash3"></i> 终止分享
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer" aria-live="polite" aria-atomic="false"></div>
+
+  <noscript>
+    <div class="app-shell">
+      <div class="glass-card" style="margin-top:20px;text-align:center;">
+        <h2 style="font-size:1rem;">需要启用 JavaScript</h2>
+        <p style="font-size:.85rem;color:#64748b;">本页面需要 JavaScript 才能上传文件和管理分享，请在浏览器设置中启用后刷新。</p>
+      </div>
+    </div>
+  </noscript>
+
+  <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

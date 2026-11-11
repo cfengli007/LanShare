@@ -1,0 +1,30 @@
+# 语言统计：signing/ 里是 Inno Setup 的二进制工具链（32 MB），体积占比会把
+# GitHub 的仓库语言误判成 Inno Setup。这里显式排除，让统计回归到 C#。
+signing/InnoSetup6-patched/** linguist-vendored
+signing/InnoSetup6-patched/** linguist-detectable=false
+signing/toolchain/** linguist-detectable=false
+assets/tools/** linguist-vendored
+assets/tools/** linguist-detectable=false
+src/LanShare.Server/wwwroot/vendor/** linguist-vendored
+src/LanShare.Server/wwwroot/vendor/** linguist-detectable=false
+
+# 行尾：Windows 项目统一 CRLF，避免跨平台 diff 噪音
+* text=auto
+*.cs text
+*.xaml text
+*.csproj text
+*.ps1 text
+*.md text
+*.iss text
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.exe binary
+*.dll binary
+*.ico binary
+*.png binary
+*.woff binary
+*.woff2 binary
+*.7z binary
+*.lib binary
+*.obj binary
+*.exp binary

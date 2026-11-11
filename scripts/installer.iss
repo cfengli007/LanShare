@@ -226,54 +226,101 @@ begin
     end;
 end;
 
-{ 检测 Microsoft.WindowsDesktop.App 8.x（WPF 靠的是它，不是 NETCore.App）。 }
-function HasDotNet8DesktopRuntime(): Boolean;
+{ 通用：检测某个共享框架（sharedfx）下有没有指定主版本前缀的版本。
+  FrameworkName 形如 'Microsoft.WindowsDesktop.App' 或 'Microsoft.AspNetCore.App'。
+  MajorPrefix 形如 '8.'。
+  检测顺序：注册表 32 位视图 → 注册表 64 位视图 → 目录 64 位 → 目录 32 位。 }
+function HasSharedFramework(const FrameworkName: String; const MajorPrefix: String): Boolean;
 var
   SubKey: String;
 begin
   Result := False;
-  SubKey := 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.WindowsDesktop.App';
+  SubKey := 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\' + FrameworkName;
 
-  { 1) 注册表：32 位视图（.NET 实际登记在这里）+ 64 位视图，两个都按「有没有 8.x 值」判断 }
   if RegHas8x(HKLM32, SubKey) then begin Result := True; Exit; end;
   if RegHas8x(HKLM64, SubKey) then begin Result := True; Exit; end;
 
-  { 2) 目录：64 位安装位置 + 32 位安装位置，两个都查（见坑 2） }
-  if DirHas8x('C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App') then
+  if DirHas8x('C:\Program Files\dotnet\shared\' + FrameworkName) then
   begin Result := True; Exit; end;
-  if DirHas8x('C:\Program Files (x86)\dotnet\shared\Microsoft.WindowsDesktop.App') then
+  if DirHas8x('C:\Program Files (x86)\dotnet\shared\' + FrameworkName) then
   begin Result := True; Exit; end;
+end;
+
+{ .NET 8 桌面运行时（NETCore.App + WindowsDesktop.App，WPF 用） }
+function HasDotNet8DesktopRuntime(): Boolean;
+begin
+  Result := HasSharedFramework('Microsoft.WindowsDesktop.App', '8.')
+            and HasSharedFramework('Microsoft.NETCore.App', '8.');
+end;
+
+{ ASP.NET Core 运行时（NETCore.App + AspNetCore.App，Kestrel 用）。
+  ⚠️ 1.1.3 关键修复：本应用经 FrameworkReference 依赖三个共享框架，而
+  「.NET 桌面运行时」安装器不含 AspNetCore.App。只检测桌面运行时的话，
+  用户装完照样弹「需要 ASP.NET Core Runtime」（1.1.1/1.1.2 的真实故障）。
+  这里必须两个运行时都查。 }
+function HasAspNetCoreRuntime(): Boolean;
+begin
+  Result := HasSharedFramework('Microsoft.AspNetCore.App', '8.')
+            and HasSharedFramework('Microsoft.NETCore.App', '8.');
 end;
 
 procedure InitializeWizard();
 var
-  Detected: String;
+  D, A: String;
 begin
-  if HasDotNet8DesktopRuntime() then Detected := 'yes' else Detected := 'no';
-  Log('LanShare installer: shared .NET 8 Desktop Runtime detected = ' + Detected);
+  if HasDotNet8DesktopRuntime() then D := 'yes' else D := 'no';
+  if HasAspNetCoreRuntime() then A := 'yes' else A := 'no';
+  Log('LanShare installer: .NET 8 Desktop Runtime detected = ' + D +
+      '; ASP.NET Core Runtime detected = ' + A);
 end;
+
+{ AspnetCoreDownloadUrl 需要带版本号的精确安装器链接，
+  用 8.0 的通用列表页最稳（不会因小版本下线而 404）。 }
+const
+  AspNetCoreDownloadUrl = 'https://dotnet.microsoft.com/download/dotnet/8.0';
 
 function InitializeSetup(): Boolean;
 var
   ErrorCode: Integer;
-  Message: String;
+  Msg, Open: String;
+  NeedDesktop, NeedAspnet: Boolean;
 begin
   Result := True;
-  if HasDotNet8DesktopRuntime() then Exit;
+  NeedDesktop := not HasDotNet8DesktopRuntime();
+  NeedAspnet := not HasAspNetCoreRuntime();
 
-  Message :=
-    '内网快传需要 .NET 8 桌面运行时（Microsoft .NET Desktop Runtime 8.0），' + #13#10 +
-    '当前系统未检测到。' + #13#10 + #13#10 +
-    '点「是」会打开官方下载页，装好运行时后再运行本安装程序即可。' + #13#10 +
-    '点「否」退出安装。' + #13#10 + #13#10 +
-    '提示：这是一个约 55 MB 的微软官方安装程序，装一次即可，' + #13#10 +
-    '之后内网快传自身的更新不会再要求它。';
+  { 两个都齐 → 正常继续 }
+  if (not NeedDesktop) and (not NeedAspnet) then Exit;
 
-  if MsgBox(Message, mbConfirmation, MB_YESNO) = IDYES then
+  Msg := '内网快传需要以下 .NET 8 运行时，当前系统未检测到：' + #13#10 + #13#10;
+
+  if NeedDesktop then
+    Msg := Msg + '  1. .NET 桌面运行时（Microsoft .NET Desktop Runtime 8.0）' + #13#10;
+  if NeedAspnet then
+    Msg := Msg + '  2. ASP.NET Core 运行时（ASP.NET Core Runtime 8.0）' + #13#10;
+
+  Msg := Msg + #13#10 +
+    '两个都是微软官方组件，装一次即可，之后内网快传自身的更新不会再要求。' + #13#10 +
+    '（本程序使用框架依赖发布，安装包只有几 MB，运行时由系统共享框架提供。）' + #13#10 + #13#10 +
+    '点「是」打开官方下载页（.NET 8 下载列表，两个都要装），' + #13#10 +
+    '装好后重新运行本安装程序。点「否」退出安装。';
+
+  if MsgBox(Msg, mbConfirmation, MB_YESNO) = IDYES then
   begin
-    ShellExec('open', DotNet8DownloadUrl, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+    if NeedDesktop then
+    begin
+      ShellExec('open', DotNet8DownloadUrl, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+      Open := 'opened desktop-runtime page';
+    end;
+    if NeedAspnet then
+    begin
+      ShellExec('open', AspNetCoreDownloadUrl, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+      if Open <> '' then Open := Open + ' + ';
+      Open := Open + 'opened aspnet page';
+    end;
+    Log('LanShare installer: missing runtime(s), ' + Open);
   end;
 
-  { 无论用户点哪个，都退出本次安装 —— 没有运行时装下去也用不了。 }
+  { 无论用户点哪个，都退出本次安装 —— 运行时缺失时装下去也用不了。 }
   Result := False;
 end;

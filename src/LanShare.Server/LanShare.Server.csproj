@@ -5,6 +5,25 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <!--
+      ⚠️ 依赖修复记录（1.1.3，全部实测）：
+
+      本项目经 FrameworkReference 依赖三个共享框架：NETCore.App、WindowsDesktop.App、
+      AspNetCore.App（因为 Web 服务用 Kestrel）。三者的分发关系：
+
+        .NET 桌面运行时（Desktop Runtime） = NETCore.App + WindowsDesktop.App
+        ASP.NET Core 运行时               = NETCore.App + AspNetCore.App
+
+      没有任何单一安装器同时含 WindowsDesktop.App 和 AspNetCore.App，
+      所以 framework-dependent 模式下用户必须装两个运行时，installer.iss 会分别检测。
+
+      1.1.2 之前只检测桌面运行时 → 用户装完仍弹「需要 ASP.NET Core Runtime」（真故障）。
+      曾试过两条“把 ASP.NET 程序集打进包”的路，都死：
+        • runtimeconfig 去掉 AspNetCore.App + 程序集进应用目录 → Kestrel StartAsync 挂死
+          （TPA 都在，类型可加载，但绑定/框架一致性层面失败；真实运行时与裸机环境一致）
+        • deps.json 注入 + 版本号补全 → 同样挂死
+      所以正确姿势就是：FD 发布 + 安装器检测两个运行时。别再试第三条路。
+    -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>

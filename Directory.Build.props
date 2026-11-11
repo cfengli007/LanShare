@@ -11,8 +11,8 @@
       改版本时只改这三行里的 Version/InformationalVersion 两个值，
       Inno 那边由 publish.ps1 自动传入，不要手改 installer.iss。
     -->
-    <Version>1.1.2</Version>
-    <InformationalVersion>1.1.2</InformationalVersion>
+    <Version>1.1.3</Version>
+    <InformationalVersion>1.1.3</InformationalVersion>
 
     <Authors>LanShare</Authors>
     <Company>LanShare</Company>
